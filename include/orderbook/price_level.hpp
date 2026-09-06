@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <vector>
 
 #include <orderbook/order.hpp>
 
@@ -28,7 +29,7 @@ public:
     // Consume up to `quantity` from the front of the queue, in
     // arrival order. Returns how much was actually filled, which
     // is less than requested if the level runs dry.
-    Quantity fill(Quantity quantity);
+    Quantity fill(Quantity quantity, OrderId aggressor, std::vector<Trade>& out);
 
 private:
     Price price_;

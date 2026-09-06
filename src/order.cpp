@@ -1,5 +1,9 @@
+#include <orderbook/order.hpp>
+
 namespace orderbook {
 
-int placeholder() { return 0; }
+bool Order::is_buy() const {
+    return side == Side::Buy;
+}
 
 }
