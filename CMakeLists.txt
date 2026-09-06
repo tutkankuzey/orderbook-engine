@@ -11,9 +11,20 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
+include(FetchContent)
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.5.2
+)
+FetchContent_MakeAvailable(Catch2)
+
+enable_testing()
+
 # --- The library: all the actual engine code ---
 add_library(orderbook
   src/order.cpp
+  src/price_level.cpp
 )
 
 target_include_directories(orderbook PUBLIC include)
@@ -25,3 +36,15 @@ target_compile_options(orderbook PRIVATE
 # --- The executable that uses the library ---
 add_executable(engine apps/main.cpp)
 target_link_libraries(engine PRIVATE orderbook)
+
+# --- Tests ---
+
+add_executable(tests
+  tests/test_order.cpp
+  tests/test_price_level.cpp
+)
+
+target_link_libraries(tests PRIVATE orderbook Catch2::Catch2WithMain)
+
+include(Catch)
+catch_discover_tests(tests)

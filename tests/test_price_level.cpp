@@ -1,0 +1,59 @@
+#include <catch2/catch_test_macros.hpp>
+#include <orderbook/price_level.hpp>
+
+using namespace orderbook;
+
+TEST_CASE("A new level is empty", "[level]") {
+    PriceLevel level(10010);
+
+    REQUIRE(level.price() == 10010);
+    REQUIRE(level.empty());
+    REQUIRE(level.total_quantity() == 0);
+    REQUIRE(level.order_count() == 0);
+}
+
+TEST_CASE("Adding orders accumulates quantity", "[level]") {
+    PriceLevel level(10010);
+    level.add(Order{1, Side::Buy, 10010, 100});
+    level.add(Order{2, Side::Buy, 10010, 50});
+
+    REQUIRE_FALSE(level.empty());
+    REQUIRE(level.order_count() == 2);
+    REQUIRE(level.total_quantity() == 150);
+}
+
+TEST_CASE("Fills consume orders in arrival order", "[level]") {
+    PriceLevel level(10010);
+    level.add(Order{1, Side::Buy, 10010, 100});
+    level.add(Order{2, Side::Buy, 10010, 50});
+
+    SECTION("a partial fill leaves the first order in place") {
+        REQUIRE(level.fill(30) == 30);
+        REQUIRE(level.order_count() == 2);
+        REQUIRE(level.total_quantity() == 120);
+    }
+
+    SECTION("exhausting the first order removes it") {
+        REQUIRE(level.fill(100) == 100);
+        REQUIRE(level.order_count() == 1);
+        REQUIRE(level.total_quantity() == 50);
+    }
+
+    SECTION("a fill can span multiple orders") {
+        REQUIRE(level.fill(120) == 120);
+        REQUIRE(level.order_count() == 1);
+        REQUIRE(level.total_quantity() == 30);
+    }
+
+    SECTION("filling more than available takes only what exists") {
+        REQUIRE(level.fill(500) == 150);
+        REQUIRE(level.empty());
+        REQUIRE(level.total_quantity() == 0);
+    }
+}
+
+TEST_CASE("Filling an empty level is a no-op", "[level]") {
+    PriceLevel level(10010);
+    REQUIRE(level.fill(100) == 0);
+    REQUIRE(level.empty());
+}
