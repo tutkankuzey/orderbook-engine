@@ -17,7 +17,6 @@ public:
     Quantity quantity_at(Side side, Price price) const;
     bool empty() const;
 
-
     std::vector<Trade> add_limit_order(const Order& order);
 private:
     std::map<Price, PriceLevel> asks_;
