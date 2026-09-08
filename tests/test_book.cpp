@@ -93,3 +93,74 @@ TEST_CASE("An exact fill leaves the book empty", "[book]") {
     REQUIRE(trades.size() == 1);
     REQUIRE(book.empty());
 }
+
+TEST_CASE("Erasing a single order", "[book]"){
+    Book book;
+    Order sell{1, Side::Sell, 10050, 100};
+    book.add_limit_order(sell);
+    book.cancel(1);
+
+    REQUIRE(book.empty());
+    REQUIRE(book.best_ask() == std::nullopt);
+}
+
+TEST_CASE("Erasing an invalid order", "[book]"){
+    Book book;
+    Order sell{1, Side::Sell, 10050, 100};
+    book.add_limit_order(sell);
+
+    REQUIRE(!book.cancel(42));
+    REQUIRE(!book.empty());
+}
+
+TEST_CASE("Tests with two orders", "[book]"){
+    Book book;
+
+    SECTION("Two orders at the same price, cancel one"){
+        Order a{1, Side::Buy, 10010, 100};
+        Order b{2, Side::Buy, 10010, 50};
+        book.add_limit_order(a);
+        book.add_limit_order(b);
+
+        book.cancel(1);
+        REQUIRE(book.quantity_at(Side::Buy, 10010) == 50);
+    }
+
+    SECTION("Two levels, cancel the better one"){
+        Order a{1, Side::Buy, 10010, 100};
+        Order b{2, Side::Buy, 10050, 50};
+        book.add_limit_order(a);
+        book.add_limit_order(b);
+
+        book.cancel(2);
+        REQUIRE(book.best_bid() == 10010);
+    }
+
+    SECTION("Cancelling a partially filled order decrements by the remainder") {
+        Order a{1, Side::Buy, 10010, 100};
+        Order b{2, Side::Buy, 10010, 25};
+        Order c{3, Side::Sell, 10000, 40};
+        book.add_limit_order(a);
+        book.add_limit_order(b);
+        book.add_limit_order(c);  // fills 40 from order 1 because order 1 came before order 2
+
+        REQUIRE(book.quantity_at(Side::Buy, 10010) == 85);      // 60 + 25
+
+        book.cancel(1);
+        REQUIRE(book.quantity_at(Side::Buy, 10010) == 25);      // only order 2 remains
+    }
+
+}
+
+TEST_CASE("Cancel prevents matching", "[book]"){
+    Book book;
+    Order a{1, Side::Buy, 10010, 100};
+    book.add_limit_order(a);
+    book.cancel(1);
+
+    Order b{2, Side::Sell, 10005, 50};
+    auto trades = book.add_limit_order(b);
+
+    REQUIRE(trades.empty());
+    REQUIRE(book.best_ask() == 10005);
+}

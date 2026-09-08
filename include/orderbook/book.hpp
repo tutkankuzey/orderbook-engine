@@ -18,6 +18,7 @@ public:
     bool empty() const;
 
     std::vector<Trade> add_limit_order(const Order& order);
+    bool cancel(OrderId id);
 private:
     std::map<Price, PriceLevel> asks_;
     std::map<Price, PriceLevel, std::greater<Price>> bids_;

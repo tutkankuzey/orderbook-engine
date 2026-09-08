@@ -44,4 +44,15 @@ Quantity PriceLevel::fill(Quantity quantity, OrderId aggressor, std::vector<Trad
     return filled;
 }
 
+    bool PriceLevel::remove(OrderId id){
+        auto it = std::find_if(orders_.begin(), orders_.end(),
+                       [id](const Order& o) { return o.id == id; });
+    
+        if (it == orders_.end()) return false;
+        
+        total_quantity_ -= it->quantity;
+        orders_.erase(it);
+        return true;
+    }
+
 }  // namespace orderbook

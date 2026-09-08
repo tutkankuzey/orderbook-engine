@@ -91,4 +91,20 @@ namespace orderbook{
 
         return trades;
     }
+
+    bool Book::cancel(OrderId id){ 
+        for (auto& [price, level] : bids_){
+            if (level.remove(id)){
+                if (level.empty()) bids_.erase(price);
+                return true;
+            }
+        }
+        for (auto& [price, level] : asks_){
+            if (level.remove(id)){
+                if (level.empty()) asks_.erase(price);
+                return true;
+            }
+        }
+        return false;
+    }
 }  // namespace orderbook
