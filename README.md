@@ -64,10 +64,10 @@ Working:
 - Limit orders, with matching, partial fills, and multi-level sweeps
 - Order cancellation
 - Trade reporting
+- Market orders
 
 Not yet implemented:
 
-- Market orders
 - CSV replay driver
 - Benchmarks
 
