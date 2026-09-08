@@ -1,8 +1,10 @@
+#include <optional>
 #include <orderbook/order.hpp>
 #include <orderbook/book.hpp>
 #include <orderbook/price_level.hpp>
 
 #include <algorithm>
+#include <vector>
 
 namespace orderbook{
 
@@ -86,6 +88,30 @@ namespace orderbook{
             else{
                 auto [it, bl] = asks_.try_emplace(order.price, order.price);
                 it->second.add(Order{order.id, order.side, order.price, remaining});
+            }
+        }
+
+        return trades;
+    }
+
+    std::vector<Trade> Book::add_market_order(OrderId id, Side side, Quantity quantity){
+        std::vector<Trade> trades;
+        if (side == Side::Buy){
+            while (quantity > 0 && !asks_.empty()){
+                auto it = asks_.begin();
+                PriceLevel& level = it->second;
+                Quantity filled = level.fill(quantity, id, trades);
+                quantity -= filled;
+                if (level.empty()) asks_.erase(it);
+            }
+        }
+        else{
+            while (quantity > 0 && !bids_.empty()){
+                auto it = bids_.begin();
+                PriceLevel& level = it->second;
+                Quantity filled = level.fill(quantity, id, trades);
+                quantity -= filled;
+                if (level.empty()) bids_.erase(it);
             }
         }
 

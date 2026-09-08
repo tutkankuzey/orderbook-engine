@@ -19,6 +19,8 @@ public:
 
     std::vector<Trade> add_limit_order(const Order& order);
     bool cancel(OrderId id);
+
+    std::vector<Trade> add_market_order(OrderId id, Side side, Quantity quantity);
 private:
     std::map<Price, PriceLevel> asks_;
     std::map<Price, PriceLevel, std::greater<Price>> bids_;
