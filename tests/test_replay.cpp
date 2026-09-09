@@ -35,3 +35,37 @@ TEST_CASE("Malformed lines are rejected", "[replay]") {
     REQUIRE_FALSE(parse_line("MARKET,1,BUY,10005,100").has_value());
     REQUIRE_FALSE(parse_line("CANCEL,1,BUY,,").has_value());
 }
+
+TEST_CASE("Limit command produces resting order at the right price and quantity", "[replay]"){
+    Book book;
+    apply(book, *parse_line("LIMIT,1,BUY,10005,100"));
+    REQUIRE(book.quantity_at(Side::Buy, 10005) == 100);
+}
+
+TEST_CASE("A market command produces trades against resting orders", "[replay]"){
+    Book book;
+
+    apply(book, *parse_line("LIMIT,1,BUY,10010,100"));
+    apply(book, *parse_line("LIMIT,42,BUY,10030,100"));
+    auto trades = apply(book, *parse_line("MARKET,3,SELL,,120"));
+    REQUIRE(trades.size() == 2);
+
+    REQUIRE(trades[0].aggressor_id == 3);
+    REQUIRE(trades[0].resting_id == 42);
+    REQUIRE(trades[0].price == 10030);
+
+    REQUIRE(trades[1].aggressor_id == 3);
+    REQUIRE(trades[1].resting_id == 1);
+    REQUIRE(trades[1].price == 10010);
+
+    REQUIRE(book.quantity_at(Side::Buy, 10030) == 0);
+    REQUIRE(book.quantity_at(Side::Buy, 10010) == 80);
+    REQUIRE(book.best_bid() == 10010);
+}
+
+TEST_CASE("A cancel command removes a resting order", "[replay]") {
+    Book book;
+    apply(book, *parse_line("LIMIT,42,BUY,10005,100"));
+    apply(book, *parse_line("CANCEL,42,,,"));
+    REQUIRE(book.empty());
+}

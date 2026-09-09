@@ -80,5 +80,18 @@ namespace { // anonymous namespace
         return std::nullopt;
     }
 
-
+    std::vector<Trade> apply(Book &book, const Command &cmd){   
+        switch (cmd.action) {
+            case Command::Action::Limit:
+                return book.add_limit_order(Order{cmd.id, cmd.side, cmd.price, cmd.quantity});
+            case Command::Action::Market:
+                return book.add_market_order(cmd.id, cmd.side, cmd.quantity);
+            case Command::Action::Cancel:
+                // A cancel for an unknown ID is not an error, as the order may already
+                // have been filled. The bool return is deliberately ignored.
+                book.cancel(cmd.id);
+                return {};
+        }
+        return {}; // unreachable, but silences "control reaches end of non-void function"
+    }
 }
