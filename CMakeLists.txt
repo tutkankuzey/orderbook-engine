@@ -26,6 +26,7 @@ add_library(orderbook
   src/order.cpp
   src/price_level.cpp
   src/book.cpp
+  src/replay.cpp
 )
 target_include_directories(orderbook PUBLIC include)
 
@@ -43,6 +44,7 @@ add_executable(tests
   tests/test_order.cpp
   tests/test_price_level.cpp
   tests/test_book.cpp
+  tests/test_replay.cpp
 )
 
 target_link_libraries(tests PRIVATE orderbook Catch2::Catch2WithMain)
