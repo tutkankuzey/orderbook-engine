@@ -164,3 +164,63 @@ TEST_CASE("Cancel prevents matching", "[book]"){
     REQUIRE(trades.empty());
     REQUIRE(book.best_ask() == 10005);
 }
+
+TEST_CASE("A market buy fills against a resting sell", "[book]"){
+    Book book;
+    Order a{1, Side::Sell, 10010, 100};
+    book.add_limit_order(a);
+    auto trades = book.add_market_order(2, Side::Buy, 100);
+
+    REQUIRE(book.best_ask() == std::nullopt);
+    REQUIRE(trades.size() == 1);
+    REQUIRE(trades[0].price == 10010);
+}
+
+TEST_CASE("Market buy sweeping two levels", "[book]"){
+    Book book;
+    Order a{1, Side::Sell, 10010, 100};
+    Order b{2, Side::Sell, 10020, 200};
+    book.add_limit_order(a);
+    book.add_limit_order(b);
+
+    SECTION("Market order doesn't empty book"){
+        auto trades = book.add_market_order(3, Side::Buy, 250);
+
+        REQUIRE(trades.size() == 2);
+        REQUIRE(trades[0].price == 10010);
+        REQUIRE(trades[0].quantity == 100);
+        REQUIRE(trades[1].price == 10020);
+        REQUIRE(trades[1].quantity == 150);
+    }
+
+    SECTION("Market order larger than the whole book"){
+        auto trades = book.add_market_order(3, Side::Buy, 500);
+        REQUIRE(trades.size() == 2);
+        REQUIRE(book.best_ask() == std::nullopt);   // the sweep consumed everything
+        REQUIRE(book.best_bid() == std::nullopt);   // the remainder was dropped, not rested
+    }
+}
+
+TEST_CASE("Market order into an empty book", "[book]"){
+    Book book;
+    auto trades = book.add_market_order(1, Side::Buy, 100);
+    REQUIRE(book.empty());
+    REQUIRE(trades.empty());
+}
+
+TEST_CASE("Market sell against resting bids", "[book]"){
+    Book book;
+    Order a{1, Side::Buy, 10020, 100};
+    Order b{2, Side::Buy, 10010, 200};
+    book.add_limit_order(a);
+    book.add_limit_order(b);
+
+    auto trades = book.add_market_order(3, Side::Sell, 350);
+    REQUIRE(trades.size() == 2);
+    REQUIRE(trades[0].price == 10020);
+    REQUIRE(trades[0].quantity == 100);
+    REQUIRE(trades[1].price == 10010);
+    REQUIRE(trades[1].quantity == 200);
+    REQUIRE(book.empty());
+}
+
