@@ -1,0 +1,25 @@
+# action,id,side,price,quantity
+LIMIT,1,BUY,10050,120
+LIMIT,2,BUY,10100,80
+LIMIT,3,SELL,10200,100
+LIMIT,4,SELL,10250,140
+
+# Order 5 joins the 10100 level behind order 2 (time priority)
+LIMIT,5,BUY,10100,60
+
+# Cancel the 10050 bid
+CANCEL,1,,,
+
+# Sell 100 into the 10100 level: fills order 2 fully (80),
+# then order 5 partially (20). Two trades both at 10100.
+LIMIT,6,SELL,10100,100
+
+# Market buy sweeps both ask levels: 100 at 10200 and then 50 at 10250.
+MARKET,7,BUY,,150
+
+# Rests: 10150 is below the best ask of 10250 so no cross.
+LIMIT,8,BUY,10150,50
+
+# Market sell for 200 against only 90 of bids: fills 50 at 10150
+# and 40 at 10100 then drops the remaining 110.
+MARKET,9,SELL,,200
