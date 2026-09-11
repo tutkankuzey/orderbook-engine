@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <map>
 #include <optional>
 #include <vector>
@@ -12,6 +13,7 @@ namespace orderbook{
 
 class Book{
 public:
+    std::size_t order_count() const;
     std::optional<Price> best_bid() const;
     std::optional<Price> best_ask() const;
     Quantity quantity_at(Side side, Price price) const;

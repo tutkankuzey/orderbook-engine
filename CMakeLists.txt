@@ -34,10 +34,11 @@ target_compile_options(orderbook PRIVATE
   -Wall -Wextra -Wpedantic
 )
 
-# --- The executable that uses the library ---
+# --- The executables that use the library ---
 add_executable(engine apps/main.cpp)
+add_executable(bench benchmarks/bench_book.cpp)
 target_link_libraries(engine PRIVATE orderbook)
-
+target_link_libraries(bench PRIVATE orderbook)
 # --- Tests ---
 
 add_executable(tests

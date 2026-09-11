@@ -75,7 +75,7 @@ Testing/
 .vscode/
 
 # Build
-build/
+build*/
 
 # Compile Commands
 compile_commands.json

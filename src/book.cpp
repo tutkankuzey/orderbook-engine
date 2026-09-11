@@ -7,7 +7,17 @@
 #include <vector>
 
 namespace orderbook{
-
+    
+    std::size_t Book::order_count() const {
+        std::size_t count = 0;
+        for (const auto& [price, level] : bids_) {
+            count += level.order_count();
+        }
+        for (const auto& [price, level] : asks_) { 
+            count += level.order_count();
+        }
+        return count;
+    }
     std::optional<Price> Book::best_bid() const{
         if (bids_.empty()){
             return std::nullopt;

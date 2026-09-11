@@ -116,11 +116,19 @@ Working:
 - Trade reporting
 - Market orders
 - CSV replay driver
+- Benchmarks
 
 Not yet implemented:
 
-- Benchmarks
 - O(1) cancellation
 
 Known limitations: single instrument, single-threaded, and cancellation is
 linear in the number of orders at a price level.
+
+## Current Benchmark
+
+- 1,000,000 commands (50% limit, 40% cancel, 10% market)
+
+- ~370,000 orders/sec
+
+- ~2,700 ns/order
