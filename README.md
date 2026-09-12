@@ -28,14 +28,32 @@ gives the best price on both sides, and the matching logic is symmetric.
 
 **Each price level holds a `std::deque`.** Orders are appended at the back and
 consumed from the front, both O(1), which is exactly the access pattern
-price-time priority needs. The tradeoff is cancellation: removing an order from
-the middle is currently O(n). Cancels are frequent in real markets, so this is
-the first thing slated for optimization.
+price-time priority needs. Removing an order from the middle is still linear in
+the level's size, so cancellation is O(orders at that price) rather than truly
+constant — see Performance below.
 
 **Trades are priced at the resting order's price.** If a sell rests at $100.50
 and a buy arrives at $101.00, the trade happens at $100.50. If a buy rests at
 $101.00 and a sell arrives at $100.50, the trade happens at $101.00. The order
 that was already there sets the price, and the incoming order gets the improvement (if any).
+
+**Orders are indexed by ID.** An `unordered_map<OrderId, {side, price}>` maps
+each resting order to its location. Without it, cancelling means scanning every
+level on both sides. The cost is keeping the index in sync: `PriceLevel::fill`
+reports which orders it exhausted so the book can remove them.
+
+## Performance
+
+1,000,000 commands (50% limit, 40% cancel, 10% market), M-series MacBook Air, `-O3`:
+
+| Version | Orders/sec | ns/order |
+|---|---|---|
+| Baseline (`std::map` scan for cancels) | 370,000 | 2,700 |
+| With order-ID index | 10,100,000 | 99 |
+
+The baseline cancel path scanned every price level on both sides, and every
+order within each level. Indexing order IDs to their (side, price) location
+reduces that to a single hash lookup plus one map lookup.
 
 ## Building and Running
 
@@ -117,18 +135,6 @@ Working:
 - Market orders
 - CSV replay driver
 - Benchmarks
+- Indexed cancellation (O(1) level lookup)
 
-Not yet implemented:
-
-- O(1) cancellation
-
-Known limitations: single instrument, single-threaded, and cancellation is
-linear in the number of orders at a price level.
-
-## Current Benchmark
-
-- 1,000,000 commands (50% limit, 40% cancel, 10% market)
-
-- ~370,000 orders/sec
-
-- ~2,700 ns/order
+Known limitations: single instrument, single-threaded, cancellation is O(1) to locate a price level but linear within it
