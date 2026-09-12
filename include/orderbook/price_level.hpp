@@ -29,9 +29,9 @@ public:
     // Consume up to `quantity` from the front of the queue, in
     // arrival order. Returns how much was actually filled, which
     // is less than requested if the level runs dry.
-    Quantity fill(Quantity quantity, OrderId aggressor, std::vector<Trade>& out);
+    Quantity fill(Quantity quantity, OrderId aggressor, std::vector<Trade>& out, std::vector<OrderId>& exhausted);
     bool remove(OrderId id);
-    
+
 private:
     Price price_;
     Quantity total_quantity_;

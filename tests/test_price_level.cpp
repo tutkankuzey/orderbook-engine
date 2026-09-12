@@ -24,37 +24,38 @@ TEST_CASE("Adding orders accumulates quantity", "[level]") {
 
 TEST_CASE("Fills consume orders in arrival order", "[level]") {
     std::vector<Trade> trades;
+    std::vector<OrderId> exhausted;
     PriceLevel level(10010);
     level.add(Order{1, Side::Buy, 10010, 100});
     level.add(Order{2, Side::Buy, 10010, 50});
     
     SECTION("a partial fill leaves the first order in place") {
         
-        REQUIRE(level.fill(30, 99, trades) == 30);
+        REQUIRE(level.fill(30, 99, trades, exhausted) == 30);
         REQUIRE(level.order_count() == 2);
         REQUIRE(level.total_quantity() == 120);
     }
 
     SECTION("exhausting the first order removes it") {
-        REQUIRE(level.fill(100, 99, trades) == 100);
+        REQUIRE(level.fill(100, 99, trades, exhausted) == 100);
         REQUIRE(level.order_count() == 1);
         REQUIRE(level.total_quantity() == 50);
     }
 
     SECTION("a fill can span multiple orders") {
-        REQUIRE(level.fill(120, 99, trades) == 120);
+        REQUIRE(level.fill(120, 99, trades, exhausted) == 120);
         REQUIRE(level.order_count() == 1);
         REQUIRE(level.total_quantity() == 30);
     }
 
     SECTION("filling more than available takes only what exists") {
-        REQUIRE(level.fill(500, 99, trades) == 150);
+        REQUIRE(level.fill(500, 99, trades, exhausted) == 150);
         REQUIRE(level.empty());
         REQUIRE(level.total_quantity() == 0);
     }
 
     SECTION("a fill spanning two orders reports two trades") {
-        REQUIRE(level.fill(120, 99, trades) == 120);
+        REQUIRE(level.fill(120, 99, trades, exhausted) == 120);
 
         REQUIRE(trades.size() == 2);
 
@@ -71,6 +72,7 @@ TEST_CASE("Fills consume orders in arrival order", "[level]") {
 TEST_CASE("Filling an empty level is a no-op", "[level]") {
     PriceLevel level(10010);
     std::vector<Trade> trades;
-    REQUIRE(level.fill(100, 99, trades) == 0);
+    std::vector<OrderId> exhausted;
+    REQUIRE(level.fill(100, 99, trades, exhausted) == 0);
     REQUIRE(level.empty());
 }

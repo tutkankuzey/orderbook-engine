@@ -224,3 +224,11 @@ TEST_CASE("Market sell against resting bids", "[book]"){
     REQUIRE(book.empty());
 }
 
+TEST_CASE("A filled order leaves no stale index entry", "[book]") {
+    Book book;
+    book.add_limit_order(Order{1, Side::Buy, 10010, 100});
+    book.add_limit_order(Order{2, Side::Sell, 10010, 100});   // fully fills order 1
+
+    REQUIRE(book.empty());
+    REQUIRE(book.index_size() == 0);   // needs a new accessor
+}

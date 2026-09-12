@@ -20,7 +20,7 @@ void PriceLevel::add(const Order& order) {
     orders_.push_back(order);
 }
 
-Quantity PriceLevel::fill(Quantity quantity, OrderId aggressor, std::vector<Trade>& out){
+Quantity PriceLevel::fill(Quantity quantity, OrderId aggressor, std::vector<Trade>& out, std::vector<OrderId>& exhausted){
     Quantity filled = 0;
 
     while (quantity > 0 && !orders_.empty()) {
@@ -37,6 +37,7 @@ Quantity PriceLevel::fill(Quantity quantity, OrderId aggressor, std::vector<Trad
 
         out.push_back(Trade{aggressor, front.id, price_, take});
         if (front.quantity == 0) {
+            exhausted.push_back(front.id);
             orders_.pop_front();
         }
     }

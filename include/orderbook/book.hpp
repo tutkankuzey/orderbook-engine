@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <orderbook/order.hpp>
@@ -11,8 +12,14 @@
 
 namespace orderbook{
 
+struct OrderLocation{
+    Side side;
+    Price price;
+};
+
 class Book{
 public:
+    std::size_t index_size() const;
     std::size_t order_count() const;
     std::optional<Price> best_bid() const;
     std::optional<Price> best_ask() const;
@@ -26,6 +33,7 @@ public:
 private:
     std::map<Price, PriceLevel> asks_;
     std::map<Price, PriceLevel, std::greater<Price>> bids_;
+    std::unordered_map<OrderId, OrderLocation> index_;
 };
 
 }
