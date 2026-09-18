@@ -1,4 +1,5 @@
 # orderbook-engine
+[![CI](https://github.com/tutkankuzey/orderbook-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/tutkankuzey/orderbook-engine/actions/workflows/ci.yml)
 
 A limit order book matching engine in C++.
 
@@ -44,12 +45,30 @@ reports which orders it exhausted so the book can remove them.
 
 ## Performance
 
-1,000,000 commands (50% limit, 40% cancel, 10% market), M-series MacBook Air, `-O3`:
+1,000,000 commands (50% limit, 40% cancel, 10% market), M-series MacBook Air,
+`RelWithDebInfo`. The numbers written are the medians obtained after three runs. The benchmark is
+deterministic (the trade count and final book size are the same every run), so the spread
+between runs is machine noise.
 
-| Version | Orders/sec | ns/order |
-|---|---|---|
-| Baseline (`std::map` scan for cancels) | 370,000 | 2,700 |
-| With order-ID index | 10,100,000 | 99 |
+
+| Version                                | Orders/sec | ns/order |
+| -------------------------------------- | ---------- | -------- |
+| Baseline (`std::map` scan for cancels)* | 370,000    | 2,700    |
+| With order-ID index                     | 9,930,000  | 101      |
+
+\* Measured on the pre-index version; not reproducible from the current tree.
+
+Reproduce with:
+
+```bash
+cmake -B build --fresh -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build
+./build/bench
+```
+
+`-O3` (`CMAKE_BUILD_TYPE=Release`) gives no measurable improvement over the
+`-O2` used here: the hot path is bound by memory access rather than
+arithmetic.
 
 The baseline cancel path scanned every price level on both sides, and every
 order within each level. Indexing order IDs to their (side, price) location
@@ -62,8 +81,9 @@ cmake -B build
 cmake --build build
 ./build/engine data/example.csv
 ```
-Requires CMake 3.16+ and a C++20 compiler. Catch2 is fetched automatically
-during configuration.
+Requires CMake 3.16+ and a C++20 compiler. Tested with Apple Clang 17 (macOS,
+arm64) and GCC on Ubuntu via CI. Catch2 is fetched automatically during
+configuration.
 
 ## CSV format
 
@@ -125,6 +145,18 @@ cmake --build build
 ./build/tests
 ```
 
+The engine is also checked under AddressSanitizer and UndefinedBehaviorSanitizer:
+
+```bash
+cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+cmake --build build-asan
+./build-asan/tests
+./build-asan/engine data/example.csv
+```
+
+Both the test suite and the CSV replay run clean.
+
 ## Status
 
 Working:
@@ -138,3 +170,9 @@ Working:
 - Indexed cancellation (O(1) level lookup)
 
 Known limitations: single instrument, single-threaded, cancellation is O(1) to locate a price level but linear within it
+
+This is **v1.0**: the single-threaded matching core. The next stage extends it
+into an exchange: a TCP order gateway, UDP multicast market data with sequence
+numbers and gap detection, a lock-free concurrent pipeline, deterministic
+journal replay, and a frequent-batch-auction matching mode for comparison
+against continuous matching.
