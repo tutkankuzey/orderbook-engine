@@ -52,6 +52,7 @@ reads that many further bytes.
 | `101` | Ack | 13 |
 | `102` | Reject | 6 |
 | `103` | Fill | 22 |
+| `104` | Cancelled | 17 |
 
 Inbound and outbound types occupy separate number ranges so that a message seen
 in the wrong direction is immediately detectable.
@@ -177,6 +178,31 @@ resting orders at different prices.
 The remaining flag exists so a client can tell a completed order from a partial
 one without accumulating quantities itself.
 
+### Cancelled (type 104, 17 bytes)
+
+Sent when a cancel removes a live order from the book.
+
+| Offset | Size | Type | Name | Notes |
+|---|---|---|---|---|
+| 0 | 1 | `uint8` | Message Type | `104` |
+| 1 | 4 | `uint32` | Client Order ID | The order that was cancelled |
+| 5 | 8 | `uint64` | Exchange Order ID | The order that was cancelled |
+| 13 | 4 | `uint32` | Cancelled Quantity | Unfilled quantity removed from the book |
+
+A cancel is not answered with an Ack. An Ack means an order was accepted into
+the book and carries a newly assigned exchange order ID; a cancel creates no
+order. Reusing it would leave a client unable to distinguish "my order rested"
+from "my order was removed", since both carry the same Client Order ID.
+
+Cancelled Quantity is the unfilled remainder actually removed, which is less
+than the order's original quantity if it had partially filled before the cancel
+arrived. A client can derive it from the original order and prior Fills; it is
+transmitted so the exchange's authoritative figure can be checked against the
+client's own accounting.
+
+A cancel for an order that is not live — never submitted, already fully filled,
+or already cancelled — is answered with a Reject carrying reason code `5`.
+
 ## Error handling
 
 Three tiers, distinguished by whether the exchange still knows where it is in
@@ -274,3 +300,7 @@ caught.
   does not replay missed messages.
 - **No order modification.** Cancel and resend.
 - **No protocol version negotiation.** Both sides are assumed to implement v1.
+- **No cancel/fill race guarantees.** A cancel and a fill for the same order may
+  be processed in either order depending on arrival time. The exchange's
+  ordering is authoritative; a client must not assume its cancel arrived before
+  a Fill it had not yet received.

@@ -1,6 +1,6 @@
 #pragma once
 
-// Wire Layouts. pragma pack(push, 1) removes extra padding so that sizeof is equal to the lenghts specified
+// Wire Layouts. pragma pack(push, 1) removes extra padding so that sizeof is equal to the lengths specified
 // in docs/PROTOCOL.md. The static assertions below the struct definitions assert just that. 
 
 #include <cstdint>
@@ -16,6 +16,7 @@ enum class MessageType : std::uint8_t {
     Ack         = 101,
     Reject      = 102,
     Fill        = 103,
+    Cancelled   = 104,
 };
 
 enum class RejectReason : std::uint8_t {
@@ -27,40 +28,52 @@ enum class RejectReason : std::uint8_t {
     NoLiquidity        = 6
 };
 
+enum class Side : std::uint8_t{ 
+    Buy = 1,
+    Sell = 2
+};
+
 struct LimitOrderMessage {
-    std::uint8_t  type;
-    std::uint8_t  side;
+    MessageType  type;
+    Side side;
     std::uint32_t client_order_id;
     std::uint32_t quantity;
     std::int32_t  price;
 };
 
 struct MarketOrderMessage {
-    std::uint8_t type;
-    std::uint8_t side;
+    MessageType  type;
+    Side side;
     std::uint32_t client_order_id;
     std::uint32_t quantity;
 };
 
 struct CancelMessage {
-    std::uint8_t type;
+    MessageType  type;
     std::uint32_t client_order_id;
 };
 
 struct AckMessage {
-    std::uint8_t type;
+    MessageType  type;
     std::uint32_t client_order_id;
     std::uint64_t exchange_order_id;
 };
 
-struct RejectMessage {
-    std::uint8_t type;
+struct CancelledMessage {
+    MessageType  type;
     std::uint32_t client_order_id;
-    std::uint8_t reason_code;
+    std::uint64_t exchange_order_id;
+    std::uint32_t cancelled_quantity;
+};
+
+struct RejectMessage {
+    MessageType  type;
+    std::uint32_t client_order_id;
+    RejectReason reason_code;
 };
 
 struct FillMessage {
-    std::uint8_t type;
+    MessageType  type;
     std::uint32_t client_order_id;
     std::uint64_t exchange_order_id;
     std::int32_t fill_price;
@@ -72,6 +85,7 @@ static_assert(sizeof(LimitOrderMessage) == 14);
 static_assert(sizeof(MarketOrderMessage) == 10);
 static_assert(sizeof(CancelMessage) == 5);
 static_assert(sizeof(AckMessage) == 13);
+static_assert(sizeof(CancelledMessage) == 17);
 static_assert(sizeof(RejectMessage) == 6);
 static_assert(sizeof(FillMessage) == 22);
 
