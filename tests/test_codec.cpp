@@ -148,3 +148,261 @@ TEMPLATE_TEST_CASE("encode leaves a too-small buffer untouched", "[codec][encode
         REQUIRE(byte == 0); // buffer should remain unwritten in
     }
 }
+
+// ===========================================================================
+// decode
+// ===========================================================================
+
+namespace {
+
+// Encodes a message into an exactly-sized array. Fails the test if encode
+// doesn't write the whole message.
+template <typename Message>
+std::array<std::uint8_t, sizeof(Message)> to_bytes(const Message& msg) {
+    std::array<std::uint8_t, sizeof(Message)> bytes{};
+    REQUIRE(encode(msg, bytes) == sizeof(Message));
+    return bytes;
+}
+
+LimitOrderMessage valid_limit() {
+    return {MessageType::LimitOrder, Side::Buy, 7, 100, 10050};
+}
+MarketOrderMessage valid_market() {
+    return {MessageType::MarketOrder, Side::Sell, 8, 250};
+}
+CancelMessage valid_cancel() {
+    return {MessageType::Cancel, 9};
+}
+
+void require_incomplete(std::span<const std::uint8_t> bytes) {
+    const auto result = decode(bytes);
+    REQUIRE(result.status == DecodeResult::Status::Incomplete);
+    REQUIRE(result.bytes_consumed == 0);
+}
+
+void require_unparseable(std::uint8_t type_byte) {
+    std::array<std::uint8_t, 32> bytes{};  // plenty of bytes, so length can't be the reason
+    bytes[0] = type_byte;
+    const auto result = decode(bytes);
+    REQUIRE(result.status == DecodeResult::Status::Unparseable);
+    REQUIRE(result.bytes_consumed == 0);
+}
+
+// A valid message decodes to the same type, the same bytes, and consumes exactly
+// its own length.
+template <typename Message>
+void require_round_trip(const Message& msg) {
+    const auto bytes  = to_bytes(msg);
+    const auto result = decode(bytes);
+
+    REQUIRE(result.status == DecodeResult::Status::Ok);
+    REQUIRE(result.bytes_consumed == sizeof(Message));
+    REQUIRE(std::holds_alternative<Message>(result.message));
+    REQUIRE(to_bytes(std::get<Message>(result.message)) == bytes);
+}
+
+// Everything the gateway relies on when it has to send a Reject.
+template <typename Message>
+void require_invalid(const Message& msg, RejectReason expected_reason) {
+    const std::uint32_t sent_id = msg.client_order_id;  // copied out: see note on packed fields
+    const auto bytes  = to_bytes(msg);
+    const auto result = decode(bytes);
+
+    REQUIRE(result.status == DecodeResult::Status::InvalidField);
+    REQUIRE(result.reason == expected_reason);
+    REQUIRE(result.client_order_id == sent_id);
+    REQUIRE(result.bytes_consumed == sizeof(Message));  // must skip the whole message
+    REQUIRE(std::holds_alternative<std::monostate>(result.message));
+}
+
+}  // namespace
+
+// --- Incomplete ------------------------------------------------------------
+
+TEST_CASE("decode waits for more bytes when a message is incomplete", "[codec][decode]") {
+    SECTION("empty buffer") {
+        require_incomplete({});
+    }
+
+    SECTION("only the type byte has arrived") {
+        for (auto type : {MessageType::LimitOrder, MessageType::MarketOrder, MessageType::Cancel}) {
+            const std::array<std::uint8_t, 1> one{static_cast<std::uint8_t>(type)};
+            require_incomplete(one);
+        }
+    }
+
+    SECTION("one byte short of a limit order") {
+        const auto bytes = to_bytes(valid_limit());
+        require_incomplete(std::span(bytes).first(bytes.size() - 1));
+    }
+
+    SECTION("one byte short of a market order") {
+        const auto bytes = to_bytes(valid_market());
+        require_incomplete(std::span(bytes).first(bytes.size() - 1));
+    }
+
+    SECTION("one byte short of a cancel") {
+        const auto bytes = to_bytes(valid_cancel());
+        require_incomplete(std::span(bytes).first(bytes.size() - 1));
+    }
+}
+
+// --- Unparseable -----------------------------------------------------------
+
+TEST_CASE("decode treats an unrecognised type byte as Unparseable", "[codec][decode]") {
+    SECTION("bytes that are not a message type") {
+        const std::array<std::uint8_t, 4> unknown{0x00, 0x04, 0x2A, 0xFF};
+        for (auto type_byte : unknown) {
+            require_unparseable(type_byte);
+        }
+    }
+
+    SECTION("outbound message types are not accepted inbound") {
+        for (auto type : {MessageType::Ack, MessageType::Reject,
+                          MessageType::Fill, MessageType::Cancelled}) {
+            require_unparseable(static_cast<std::uint8_t>(type));
+        }
+    }
+}
+
+// --- Ok --------------------------------------------------------------------
+
+TEST_CASE("decode accepts each valid inbound message", "[codec][decode]") {
+    SECTION("limit order")  { require_round_trip(valid_limit()); }
+    SECTION("market order") { require_round_trip(valid_market()); }
+    SECTION("cancel")       { require_round_trip(valid_cancel()); }
+}
+
+TEST_CASE("decode reads the worked example in PROTOCOL.md", "[codec][decode]") {
+    // Typed in from the spec, not produced by encode.
+    const std::array<std::uint8_t, 14> bytes{
+        0x01, 0x01, 0x07, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x42, 0x27, 0x00, 0x00,
+    };
+    const auto result = decode(bytes);
+
+    REQUIRE(result.status == DecodeResult::Status::Ok);
+    REQUIRE(result.bytes_consumed == 14);
+    REQUIRE(std::holds_alternative<LimitOrderMessage>(result.message));
+
+    const auto& msg = std::get<LimitOrderMessage>(result.message);
+    const Side          side  = msg.side;
+    const std::uint32_t id    = msg.client_order_id;
+    const std::uint32_t qty   = msg.quantity;
+    const std::int32_t  price = msg.price;
+
+    REQUIRE(side == Side::Buy);
+    REQUIRE(id == 7);
+    REQUIRE(qty == 100);
+    REQUIRE(price == 10050);
+}
+
+TEST_CASE("decode accepts field values exactly at their limits", "[codec][decode]") {
+    auto msg = valid_limit();
+
+    SECTION("sell side")        { msg.side = Side::Sell;        require_round_trip(msg); }
+    SECTION("minimum quantity") { msg.quantity = min_quantity;  require_round_trip(msg); }
+    SECTION("maximum quantity") { msg.quantity = max_quantity;  require_round_trip(msg); }
+    SECTION("minimum price")    { msg.price = min_price;        require_round_trip(msg); }
+    SECTION("maximum price")    { msg.price = max_price;        require_round_trip(msg); }
+}
+
+TEST_CASE("decode takes only the first of two back-to-back messages", "[codec][decode]") {
+    const auto limit  = to_bytes(valid_limit());
+    const auto cancel = to_bytes(valid_cancel());
+
+    std::array<std::uint8_t, sizeof(LimitOrderMessage) + sizeof(CancelMessage)> stream{};
+    std::copy(limit.begin(), limit.end(), stream.begin());
+    std::copy(cancel.begin(), cancel.end(), stream.begin() + limit.size());
+
+    const auto first = decode(stream);
+    REQUIRE(first.status == DecodeResult::Status::Ok);
+    REQUIRE(first.bytes_consumed == sizeof(LimitOrderMessage));
+    REQUIRE(std::holds_alternative<LimitOrderMessage>(first.message));
+
+    // What the gateway will do: skip what was consumed, decode what's left.
+    const auto second = decode(std::span(stream).subspan(first.bytes_consumed));
+    REQUIRE(second.status == DecodeResult::Status::Ok);
+    REQUIRE(second.bytes_consumed == sizeof(CancelMessage));
+    REQUIRE(std::holds_alternative<CancelMessage>(second.message));
+}
+
+// --- InvalidField ----------------------------------------------------------
+
+TEST_CASE("decode rejects a limit order with an out-of-range field", "[codec][decode]") {
+    auto msg = valid_limit();
+
+    SECTION("side zero") {
+        msg.side = static_cast<Side>(0);
+        require_invalid(msg, RejectReason::InvalidSide);
+    }
+    SECTION("side with no name") {
+        msg.side = static_cast<Side>(3);
+        require_invalid(msg, RejectReason::InvalidSide);
+    }
+    SECTION("client order id zero") {
+        msg.client_order_id = 0;
+        require_invalid(msg, RejectReason::UnknownClientID);
+    }
+    SECTION("quantity below minimum") {
+        msg.quantity = min_quantity - 1;
+        require_invalid(msg, RejectReason::QtyOutOfRange);
+    }
+    SECTION("quantity above maximum") {
+        msg.quantity = max_quantity + 1;
+        require_invalid(msg, RejectReason::QtyOutOfRange);
+    }
+    SECTION("price below minimum") {
+        msg.price = min_price - 1;
+        require_invalid(msg, RejectReason::PriceOutOfRange);
+    }
+    SECTION("negative price") {
+        msg.price = -10050;
+        require_invalid(msg, RejectReason::PriceOutOfRange);
+    }
+    SECTION("price above maximum") {
+        msg.price = max_price + 1;
+        require_invalid(msg, RejectReason::PriceOutOfRange);
+    }
+}
+
+TEST_CASE("decode rejects a market order with an out-of-range field", "[codec][decode]") {
+    auto msg = valid_market();
+
+    SECTION("bad side") {
+        msg.side = static_cast<Side>(3);
+        require_invalid(msg, RejectReason::InvalidSide);
+    }
+    SECTION("client order id zero") {
+        msg.client_order_id = 0;
+        require_invalid(msg, RejectReason::UnknownClientID);
+    }
+    SECTION("quantity below minimum") {
+        msg.quantity = min_quantity - 1;
+        require_invalid(msg, RejectReason::QtyOutOfRange);
+    }
+    SECTION("quantity above maximum") {
+        msg.quantity = max_quantity + 1;
+        require_invalid(msg, RejectReason::QtyOutOfRange);
+    }
+}
+
+TEST_CASE("decode rejects a cancel with client order id zero", "[codec][decode]") {
+    auto msg = valid_cancel();
+    msg.client_order_id = 0;
+    require_invalid(msg, RejectReason::UnknownClientID);
+}
+
+TEST_CASE("decode reports the first invalid field in spec order", "[codec][decode]") {
+    auto msg = valid_limit();
+
+    SECTION("bad side and bad quantity: side wins") {
+        msg.side     = static_cast<Side>(3);
+        msg.quantity = 0;
+        require_invalid(msg, RejectReason::InvalidSide);
+    }
+    SECTION("bad quantity and bad price: quantity wins") {
+        msg.quantity = 0;
+        msg.price    = 0;
+        require_invalid(msg, RejectReason::QtyOutOfRange);
+    }
+}
