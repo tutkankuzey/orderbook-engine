@@ -9,6 +9,13 @@
 #pragma pack(push, 1) 
 namespace orderbook::protocol {
 
+// Legal field ranges, from docs/PROTOCOL.md. The decoder enforces these;
+// tests use them for boundary cases.
+inline constexpr std::uint32_t min_quantity = 1;
+inline constexpr std::uint32_t max_quantity = 100'000;
+inline constexpr std::int32_t  min_price    = 1;
+inline constexpr std::int32_t  max_price    = 100'000'000;
+
 enum class MessageType : std::uint8_t {
     LimitOrder  = 1,
     MarketOrder = 2,
