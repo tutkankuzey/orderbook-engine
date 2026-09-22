@@ -151,7 +151,7 @@ acked first.
 | `2` | Quantity out of range |
 | `3` | Price out of range |
 | `4` | Duplicate Client Order ID |
-| `5` | Unknown Client Order ID (cancel for an order that is not live) |
+| `5` | Unknown or unusable client order ID: a cancel for an order that is not live, or a new order whose client order ID is 0. |
 | `6` | No liquidity (market order with an empty opposing book) |
 
 A numeric code rather than free text keeps the message fixed-size and avoids
@@ -217,7 +217,8 @@ Reject with the appropriate code. The connection continues.
 known, so the message length is known and it was read in full, but a field is
 out of range: quantity `0`, side `7`, negative price. Response: a Reject with
 the appropriate code. The connection continues, because the message boundary is
-known and the reader is still synchronised.
+known and the reader is still synchronised. If several fields are invalid, 
+the Reject reports the first one in the message's field order.
 
 **Tier 3 — unparseable.** The type byte is not a known inbound type. The
 message length is therefore unknown, so the reader cannot find where the next
@@ -227,7 +228,8 @@ mechanism. Response: close the connection immediately without a Reject.
 Since TCP delivers bytes in order and uncorrupted, a tier-3 error means the
 client's encoder is broken or the client is hostile. Disconnection is also the
 resynchronisation mechanism: a reconnecting client starts a fresh stream whose
-first byte is, by definition, the start of a message.
+first byte is, by definition, the start of a message. An outbound message type (101–104) 
+received from a client is not a known inbound type and is treated as unparseable.
 
 A client may also stop sending mid-message. The exchange does not treat a
 partial message as an error while it waits, but a connection with an incomplete
